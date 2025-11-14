@@ -50,10 +50,12 @@ class GPSTrackerScreen extends StatefulWidget {
 class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
   final List<Map<String, dynamic>> _gpsLog = [];
   StreamSubscription<Position>? _positionSubscription;
+  Timer? _clockTimer;
   bool _isTracking = false;
   bool _hasGpsFix = false;
   String? _statusMessage;
   DateTime? _startTime;
+  DateTime? _lastCaptureTime;
 
   bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -98,6 +100,7 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
     _statusMessage = 'Inicializando GPS...';
     _hasGpsFix = false;
     _startTime = DateTime.now();
+    _lastCaptureTime = null;
 
     setState(() {
       _isTracking = true;
@@ -106,6 +109,16 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
     debugPrint('[GPS] Habilitando wakelock...');
     await WakelockPlus.enable();
     await _positionSubscription?.cancel();
+    _clockTimer?.cancel();
+
+    // Timer para atualizar o relógio a cada segundo
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _isTracking) {
+        setState(() {
+          // Apenas atualiza o relógio, forçando rebuild
+        });
+      }
+    });
 
     final locationSettings = _buildLocationSettings();
     debugPrint('[GPS] Configurações: $locationSettings');
@@ -211,11 +224,11 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
       return AndroidSettings(
         accuracy: base,
         distanceFilter: 0,
-        intervalDuration: const Duration(seconds: 1),
+        intervalDuration: const Duration(seconds: 30), // 30 segundos entre capturas
         forceLocationManager: true,
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'GPS Logger ativo',
-          notificationText: 'Registrando coordenadas...',
+          notificationText: 'Registrando coordenadas a cada 30 segundos',
           enableWakeLock: true,
           enableWifiLock: true,
           setOngoing: true,
@@ -226,12 +239,14 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
     return const LocationSettings(
       accuracy: base,
       distanceFilter: 0,
+      timeLimit: const Duration(seconds: 30), // 30 segundos entre capturas
     );
   }
 
   void _onNewPosition(Position position) {
+    final now = DateTime.now();
     final record = {
-      'ts': DateTime.now().toUtc().toIso8601String(),
+      'ts': now.toUtc().toIso8601String(),
       'lat': position.latitude,
       'lon': position.longitude,
       'speed_m_s': position.speed,
@@ -240,25 +255,40 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
       'accuracy': position.accuracy,
     };
 
-    debugPrint('[GPS] 📍 Nova posição: lat=${position.latitude.toStringAsFixed(6)}, lon=${position.longitude.toStringAsFixed(6)}, acc=${position.accuracy.toStringAsFixed(1)}m');
+    debugPrint('[GPS] 📍 Nova posição #${_gpsLog.length + 1}: lat=${position.latitude.toStringAsFixed(6)}, lon=${position.longitude.toStringAsFixed(6)}, acc=${position.accuracy.toStringAsFixed(1)}m');
 
-    setState(() {
+    _lastCaptureTime = now;
+
+    // Otimização: só atualiza a UI se necessário
+    if (!_hasGpsFix || _statusMessage != null) {
+      setState(() {
+        _gpsLog.add(record);
+        _hasGpsFix = true;
+        _statusMessage = null;
+      });
+    } else {
+      // Não precisa setState - apenas adiciona ao log
       _gpsLog.add(record);
-      _hasGpsFix = true;
-      _statusMessage = null;
-    });
+      // O Timer já está atualizando a UI a cada segundo
+    }
   }
 
   Future<void> _stopTracking() async {
+    debugPrint('[GPS] Parando tracking...');
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    _clockTimer?.cancel();
+    _clockTimer = null;
     await WakelockPlus.disable();
 
     setState(() {
       _isTracking = false;
       _statusMessage = null;
       _hasGpsFix = false;
+      _lastCaptureTime = null;
     });
+
+    debugPrint('[GPS] Tracking parado. Total de pontos: ${_gpsLog.length}');
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,9 +401,25 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
     return '$hours:$minutes:$seconds';
   }
 
+  String? _getNextCaptureInfo() {
+    if (!_isTracking || _lastCaptureTime == null) return null;
+
+    final now = DateTime.now();
+    final elapsed = now.difference(_lastCaptureTime!).inSeconds;
+    final remaining = 30 - elapsed;
+
+    if (remaining <= 0) {
+      return 'Próxima captura: aguardando GPS...';
+    }
+
+    return 'Próxima captura em ${remaining}s';
+  }
+
   @override
   void dispose() {
+    debugPrint('[GPS] Dispose - limpando recursos...');
     _positionSubscription?.cancel();
+    _clockTimer?.cancel();
     WakelockPlus.disable();
     super.dispose();
   }
@@ -418,6 +464,7 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
                                     (_isTracking && !_hasGpsFix
                                         ? 'Buscando sinal de GPS...'
                                         : null),
+                                nextCaptureInfo: _getNextCaptureInfo(),
                               ),
                               const SizedBox(height: 24),
                               ActionButtons(
@@ -458,6 +505,7 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
                         (_isTracking && !_hasGpsFix
                             ? 'Buscando sinal de GPS...'
                             : null),
+                    nextCaptureInfo: _getNextCaptureInfo(),
                   ),
                   const SizedBox(height: 24),
                   ActionButtons(

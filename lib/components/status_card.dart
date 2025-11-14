@@ -6,6 +6,7 @@ class StatusCard extends StatelessWidget {
   final int points;
   final String duration;
   final String? statusMessage;
+  final String? nextCaptureInfo;
 
   const StatusCard({
     Key? key,
@@ -13,6 +14,7 @@ class StatusCard extends StatelessWidget {
     required this.points,
     required this.duration,
     this.statusMessage,
+    this.nextCaptureInfo,
   }) : super(key: key);
 
   @override
@@ -86,6 +88,28 @@ class StatusCard extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
+          if (nextCaptureInfo != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E5FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF00E5FF).withOpacity(0.3),
+                ),
+              ),
+              child: Text(
+                nextCaptureInfo!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF00E5FF),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             const SizedBox(height: 18),
