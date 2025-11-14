@@ -1,0 +1,35 @@
+name: gps_agricola_app
+description: App para captura de coordenadas GPS em operações agrícolas
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # GPS e localização
+  geolocator: ^13.0.0
+  permission_handler: ^11.0.0
+  
+  # Manipulação de arquivos
+  path_provider: ^2.1.3
+  share_plus: ^7.2.2
+  wakelock_plus: ^1.2.5
+  
+  # UI
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+

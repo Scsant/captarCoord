@@ -1,0 +1,39 @@
+name: coordinates_capture_app
+description: App simples para captura de coordenadas GPS e exportação em JSON
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # GPS e localização
+  geolocator: ^10.1.0
+  permission_handler: ^11.0.1
+  
+  # Banco de dados local
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  
+  # Manipulação de arquivos
+  path_provider: ^2.1.1
+  
+  # UI
+  cupertino_icons: ^1.0.6
+  
+  # Utilitários
+  uuid: ^4.1.0
+  intl: ^0.18.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
