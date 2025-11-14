@@ -61,6 +61,7 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[GPS] ========== APP INICIADO ==========');
     _checkPermissions();
   }
 
@@ -69,16 +70,25 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
   }
 
   Future<void> _startTracking() async {
+    debugPrint('[GPS] Iniciando tracking...');
+
     final permissionGranted = await _requestLocationPermissions();
     if (!permissionGranted) {
+      debugPrint('[GPS] Permissão negada');
       return;
     }
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    debugPrint('[GPS] Serviço de localização: ${serviceEnabled ? "ATIVADO" : "DESATIVADO"}');
+
     if (!serviceEnabled) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ative o serviço de localização.')),
+          const SnackBar(
+            content: Text('⚠️ Ative o GPS nas configurações do dispositivo!'),
+            duration: Duration(seconds: 5),
+            backgroundColor: Colors.orange,
+          ),
         );
       }
       return;
@@ -93,38 +103,55 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
       _isTracking = true;
     });
 
+    debugPrint('[GPS] Habilitando wakelock...');
     await WakelockPlus.enable();
     await _positionSubscription?.cancel();
 
     final locationSettings = _buildLocationSettings();
+    debugPrint('[GPS] Configurações: $locationSettings');
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen(
       _onNewPosition,
       onError: (error) {
+        debugPrint('[GPS] ERRO no stream: $error');
         setState(() {
           _statusMessage = 'Erro de GPS: $error';
         });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro ao capturar GPS: $error'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       },
     );
 
     // Forçar uma leitura imediata para acelerar fixo inicial
+    debugPrint('[GPS] Solicitando posição inicial...');
     _obtainInitialFix();
   }
 
   Future<bool> _requestLocationPermissions({bool forceDialog = false}) async {
     LocationPermission permission = await Geolocator.checkPermission();
+    debugPrint('[GPS] Permissão atual: $permission');
 
     if (permission == LocationPermission.denied || forceDialog) {
+      debugPrint('[GPS] Solicitando permissão...');
       permission = await Geolocator.requestPermission();
+      debugPrint('[GPS] Nova permissão: $permission');
     }
 
     if (permission == LocationPermission.denied) {
+      debugPrint('[GPS] Permissão NEGADA pelo usuário');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Permissão negada. Autorize a localização.'),
+            content: Text('❌ Permissão negada. Autorize a localização.'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -132,12 +159,15 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
     }
 
     if (permission == LocationPermission.deniedForever) {
+      debugPrint('[GPS] Permissão negada PERMANENTEMENTE');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Permissão negada permanentemente. Ative nas configurações.',
+              '❌ Permissão negada permanentemente. Ative nas configurações.',
             ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
           ),
         );
       }
@@ -145,9 +175,13 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
       return false;
     }
 
+    debugPrint('[GPS] Permissão CONCEDIDA: $permission');
+
     if (_isAndroid) {
-      await Permission.ignoreBatteryOptimizations.request();
-      await Permission.notification.request();
+      debugPrint('[GPS] Solicitando permissões adicionais do Android...');
+      final batteryOptimization = await Permission.ignoreBatteryOptimizations.request();
+      final notification = await Permission.notification.request();
+      debugPrint('[GPS] Battery optimization: $batteryOptimization, Notification: $notification');
     }
 
     return true;
@@ -155,12 +189,15 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
 
   Future<void> _obtainInitialFix() async {
     try {
+      debugPrint('[GPS] Aguardando primeira posição (timeout: 15s)...');
       final firstPosition = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.bestForNavigation,
         timeLimit: const Duration(seconds: 15),
       );
+      debugPrint('[GPS] ✅ Primeira posição obtida: lat=${firstPosition.latitude}, lon=${firstPosition.longitude}, acc=${firstPosition.accuracy}m');
       _onNewPosition(firstPosition);
     } catch (e) {
+      debugPrint('[GPS] ⚠️ Primeira posição falhou: $e');
       setState(() {
         _statusMessage = 'Buscando sinal de GPS...';
       });
@@ -202,6 +239,8 @@ class _GPSTrackerScreenState extends State<GPSTrackerScreen> {
       'heading': position.heading,
       'accuracy': position.accuracy,
     };
+
+    debugPrint('[GPS] 📍 Nova posição: lat=${position.latitude.toStringAsFixed(6)}, lon=${position.longitude.toStringAsFixed(6)}, acc=${position.accuracy.toStringAsFixed(1)}m');
 
     setState(() {
       _gpsLog.add(record);
